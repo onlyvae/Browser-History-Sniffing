@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <style>
+        #out a {
+            display: inline-block;
+            transform: perspective(100px) rotateY(10deg);
+            filter: contrast(200%) drop-shadow(16px 16px 10px #fefefe) saturate(200%);
+            color: red;
+        }
+
+        #out a:visited {
+            color: blue;
+        }
+
+        #out {
+            position: fixed;
+            top: 0px;
+            left: 500px;
+        }
+
+        input {
+            text-align: center
+        }
+
+        .linklist span.visited {
+            visibility: hidden;
+            color: white;
+            background: green;
+            border-radius: 5px;
+            padding: 2px;
+            font-size: 8pt
+        }
+
+        .linklist span.visited.yes {
+            visibility: visible
+        }
+
+        .linklist .timings {
+            font-family: monospace;
+            font-size: 8pt
+        }
+
+        .line {
+            border-bottom: 1px dashed black;
+        }
+
+        #result {
+            display: none;
+            /* text-align: center; */
+        }
+
+        #stats {
+            width: 418px;
+        }
+
+        .linklist {
+            width: 320px;
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.css"
+        integrity="sha384-bsHo4/LA+lkZv61JspMDQB9QP1TtO4IgOf2yYS+J6VdAYLVyx1c3XKcsHh0Vy8Ws" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.js"
+        integrity="sha384-4z8mjH4yIpuK9dIQGR1JwbrfYsStrNK6MP+2Enhue4eyo0XlBDXOIPc8b6ZU0ajz"
+        crossorigin="anonymous"></script>
+</head>
+
+<body>
+    <table style="width:320px" id="control">
+        <tr>
+            <td colspan="2" style="border-bottom: 1px dashed;text-align: center">
+                <b>Adaptive Browser History Sniffing&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</b>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <button onclick="setupLinks();updateParams()">Start</button>
+                <button onclick="stop=true">Stop</button>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                Fixed time <span id="Timing-time" class="latex"></span>:
+                <input id="statistical-time" value="500" size="4"> ms
+            </td>
+            <td>
+                <input id="calibIters" value="4" size="6" style="display:none;">
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                Optimal number of auxiliary links <span id="Optimal-number" class="latex"></span>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                <span id="F_visited"></span> ,
+
+                <span id="F_unvisited"></span>
+            </td>
+        </tr>
+        <tr style="display: none">
+            <td>
+                The number of links
+            </td>
+            <td>
+                <input id="textlines" value="" size="6" style="border: 0px" disabled="disabled">
+            </td>
+        </tr>
+    </table>
+    <div id="stats">
+        <div style="visibility:hidden">Current URL: <span id="currentURL"></span></div>
+        <div id="log">
+            <table id="result">
+                <tr>
+                    <th colspan="2">RESULT&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</th>
+                </tr>
+                <tr>
+                    <td class="line" colspan="2"></td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    <div id="out">
+    </div>
+    <script>
+        var top100 = ["https://Baidu.com", "https://Qq.com", "https://Tmall.com", "https://Taobao.com", "https://Sohu.com", "https://Jd.com", "https://Sina.com.cn", "https://Weibo.com", "https://360.cn", "https://Login.tmall.com", "https://Google.com", "https://Csdn.net", "https://Youtube.com", "https://Pages.tmall.com", "https://Alipay.com", "https://Google.com.hk", "https://Bilibili.com", "https://Soso.com", "https://Xinhuanet.com", "https://Hao123.com", "https://Detail.tmall.com", "https://Cnblogs.com", "https://Babytree.com", "https://163.com", "https://So.com", "https://Tianya.cn", "https://Zhihu.com", "https://Bing.com", "https://Google.cn", "https://Iqiyi.com", "https://Panda.tv", "https://Wikipedia.org", "https://Sogou.com", "https://Gmw.cn", "https://Douban.com", "https://Zhanqi.tv", "https://1688.com", "https://China.com.cn", "https://Jianshu.com", "https://Caijing.com.cn", "https://Douyu.com", "https://Aliyun.com", "https://Eastday.com", "https://Huanqiu.com", "https://Rednet.cn", "https://Github.com", "https://Youku.com", "https://Yy.com", "https://Amazon.com", "https://Amazon.cn"];
+        var urls = [location.href, 'http://notvisited' + ((Math.random() * 100000000) | 0) + '.foo'];
+        var ispc = true;
+        requestAnimationFrame = window.requestAnimationFrame || window.mozRequestAnimationFrame || window.webkitRequestAnimationFrame || window.msRequestAnimationFrame;
+        var out = document.getElementById('out');
+        var currentURLout = document.getElementById('currentURL');
+        var resultEle = document.getElementById('result');
+        var control = document.getElementById('control');
+        var linkspans = [];
+        var timespans = [];
+        var statisticalTime;
+        var counter = 0;
+        var posTimes = [];
+        var negTimes = [];
+        var stop = true;
+        var start;
+        var currentUrl = 0;
+        var startTime;
+        var searchTime;
+        var calibIters = 4;
+        var INIT_N_PC = 50;
+        var INIT_N_MOBILE = 10;
+        var ITER_STEP = 1;
+        var stage = 0;
+        var index = 1;
+        var N = [0];
+        var UV = [0];
+        var V = [0];
+        var D = [0];
+        var VAR = [0];
+        function initStats() {
+            startTime = Date.now();
+            currentUrl = 0;
+            start = NaN;
+            counter = 0;
+            posTimes = [];
+            negTimes = [];
+            if (stop) {
+                stop = false;
+                loop();
+            }
+        }
+        function updateParams() {
+            out.style.textShadow = "black 1px 1px 10px";
+            textLines = parseInt(document.getElementById('textlines').value);
+            textLen = 5
+            statisticalTime = parseInt(document.getElementById('statistical-time').value);
+            calibIters = parseInt(document.getElementById("calibIters").value);
+            currentURLout.parentElement.style.visibility = "visible";
+            write();
+            resetLinks();
+            initStats();
+        }
+        function write() {
+            var s = '';
+            var url = urls[currentUrl];
+            var text = '';
+            while (text.length < textLen)
+                text += '#';
+            for (var i = 0; i < textLines; i++) {
+                s += "<a href=" + url;
+                s += ">" + text;
+                s += "</a> ";
+            }
+            out.innerHTML = s;
+        }
+
+        var isPC = function () {
+            var userAgentInfo = navigator.userAgent.toLowerCase();
+            var Agents = new Array("android", "iphone", "symbianOS", "windows phone", "ipad", "ipod");
+            var flag = true;
+            for (var v = 0; v < Agents.length; v++) {
+                if (userAgentInfo.indexOf(Agents[v]) > 0) { flag = false; break; }
+            }
+            return flag;
+        }
+
+        function updateLinks() {
+            var url = urls[currentUrl];
+            for (var i = 0; i < out.children.length; i++) {
+                out.children[i].href = url;
+                out.children[i].style.color = 'red';
+                out.children[i].style.color = '';
+            }
+        }
+        function resetLinks() {
+            for (var i = 0; i < out.children.length; i++) {
+                out.children[i].href = 'http://' + Math.random() + '.asd';
+                out.children[i].style.color = 'red';
+                out.children[i].style.color = '';
+            }
+        }
+        function variance(arr) {
+            let s,
+                ave,
+                sum = 0,
+                sums = 0,
+                len = arr.length;
+            for (let i = 0; i < len; i++) {
+                sum += Number(arr[i]);
+            }
+            ave = sum / len;
+            for (let i = 0; i < len; i++) {
+                sums += (Number(arr[i]) - ave) * (Number(arr[i]) - ave)
+            }
+            s = (sums / len);
+            return s;
+        }
+        function average(list) {
+            var tmp = 0;
+            list.forEach(element => {
+                tmp += element;
+            });
+            return tmp / list.length;
+        }
+        function argtop2() {
+            var top1 = top2 = 1;
+            for (var i = 1; i < N.length; i++) {
+                if ((D[i]) >= (D[top1]))
+                    top1 = i;
+            }
+            for (var i = 1; i < N.length; i++) {
+                if (i != top1 && (D[i]) >= (D[top2]))
+                    top2 = i;
+            }
+            return [top1, top2];
+        }
+        function loop(timestamp) {
+            if (stop) return;
+            if (!start) start = timestamp;
+            if (timestamp > start + statisticalTime) {
+                if (currentUrl == 0) {
+                    document.getElementById('basearea').textContent = 'Calibrating...';
+                    posTimes.push(counter);
+                    timespans[currentUrl].textContent = posTimes.join(', ');;
+                }
+                if (currentUrl == 1) {
+                    negTimes.push(counter);
+                    timespans[currentUrl].textContent = negTimes.join(', ');
+                    if (negTimes.length >= calibIters) {
+                        var diffArr = [];
+                        for (var i = 0; i < posTimes.length; i++) {
+                            diffArr[i] = negTimes[i] - posTimes[i];
+                        }
+                        UV[index] = average(negTimes);
+                        V[index] = average(posTimes);
+                        D[index] = average(diffArr) > 1 ? average(diffArr) : 1;
+                        VAR[index] = variance(diffArr);
+
+                        var dpl = D[index] / N[index];
+                        if (stage == 0) {
+                            if (D[index] <= D[index - 1]) {
+
+                                stage = 1;
+                            } else {
+
+                                ITER_STEP = ITER_STEP * 2;
+                                index++;
+                                N[index] = N[index - 1] + parseInt(ITER_STEP / dpl);
+
+                                stop = true;
+                                updateParams();
+                                return;
+                            }
+                        }
+                        if (stage == 1) {
+                            ITER_STEP = 1;
+                            index++;
+                            N[index] = N[index - 1] + parseInt(ITER_STEP / dpl);
+                            stage = 2;
+                            stop = true;
+                            updateParams();
+                            return;
+                        }
+                        if (stage == 2) {
+                            var top2 = argtop2();
+                            if (VAR[top2[0]] > VAR[top2[1]])
+                                index = top2[0];
+                            else
+                                index = top2[1];
+                        }
+
+                        document.getElementById("Optimal-number").append(" : " + N[index]);
+                        document.getElementById("F_visited").append(" : " + V[index]);
+                        document.getElementById("F_unvisited").append(" : " + UV[index]);
+                        document.getElementById('textlines').value = N[index];
+                        write();
+                        threshold = V[index] + D[index] * .5;
+                        searchTime = (Date.now() - startTime) / 1000;
+                        startTime = Date.now();
+                        document.getElementById('testarea').textContent = 'Testing...';
+                        document.getElementById('basearea').textContent = 'BASE URL    '
+                        var tr = document.createElement('tr');
+                        tr.insertCell().innerText = 'Visited: ' + V[index] + ' fps';
+                        tr.insertCell().innerText = 'Unvisited: ' + UV[index] + ' fps';
+                        resultEle.appendChild(tr);
+                    }
+                }
+                if (currentUrl >= 2) {
+                    timespans[currentUrl].textContent = counter;
+                    linkspans[currentUrl].className = (counter <= threshold) ? 'visited yes' : 'visited';
+                }
+                currentUrl++;
+
+                if (currentUrl == 2 && (negTimes.length < calibIters || posTimes.length < calibIters))
+                    currentUrl = 0;
+                if (currentUrl == urls.length) {
+                    predictTime = (Date.now() - startTime) / 1000;
+                    document.getElementById('testarea').textContent = '100 Target URLs    '
+                    currentURLout.parentElement.style.display = "none";
+                    var tr = document.createElement('tr');
+                    tr.insertCell().innerText = "Time elapsed: " + (searchTime + predictTime).toFixed(2) + " s";
+                    resultEle.appendChild(tr);
+                    control.appendChild(tr);
+                    var tr = document.createElement('tr');
+                    tr.insertCell().innerText = "Search time: " + searchTime.toFixed(2) + " s";
+                    tr.insertCell().innerText = "Check time: " + predictTime.toFixed(2) + " s";
+                    resultEle.appendChild(tr);
+                    resultEle.firstElementChild.firstElementChild.firstElementChild.width = getComputedStyle(document.getElementsByClassName('linklist')[0]).width;
+
+                    out.style.display = "none";
+                    document.getElementsByClassName("linklist")[0].children[0].style.display = "none"
+                    document.getElementsByClassName("linklist")[0].children[1].style.display = "none"
+                    document.getElementsByClassName("linklist")[0].children[2].style.display = "none"
+                    document.getElementsByClassName("linklist")[0].children[3].style.display = "none"
+                    document.getElementsByClassName("linklist")[0].children[4].style.display = "none"
+                    stop = true;
+                } else {
+                    counter = 0;
+                    start = NaN;
+                }
+            }
+            if (counter % 2 == 0) {
+                updateLinks();
+            } else {
+                resetLinks();
+            }
+            counter++;
+            currentURLout.textContent = urls[currentUrl];
+            requestAnimationFrame(loop);
+        }
+        function initParms() {
+            if (isPC()) {
+                N[index] = INIT_N_PC;
+            }
+            else {
+                ispc = false;
+                N[index] = INIT_N_MOBILE;
+            }
+            document.getElementById('textlines').value = N[index];
+
+            stage = 0;
+        }
+        function setupLinks() {
+            for (var i = 0; i < top100.length; i++) {
+                urls.push(top100[i]);
+            }
+            var table = document.createElement('table');
+            table.innerHTML = '<tr><th></th><th id="basearea" >BASE URL</th><th >Frame</th></tr>';
+            table.className = 'linklist';
+            var p = 0;
+            for (var i = 0; i < urls.length; i++) {
+                if (i == 0) {
+                    var tr = document.createElement('tr');
+                    tr.insertCell().className = "line"
+                    tr.insertCell().className = "line"
+                    tr.insertCell().className = "line"
+                    table.appendChild(tr);
+                    var tr = document.createElement('tr');
+                    var t = tr.insertCell();
+                    t.colSpan = 3;
+                    table.appendChild(tr);
+                }
+                var a = document.createElement('a');
+                a.href = urls[i];
+                a.textContent = urls[i];
+                var times = document.createElement('span');
+                times.className = 'timings';
+                var tick = document.createElement('span');
+                tick.textContent = '\u2713';
+                tick.className = 'visited';
+                var tr = document.createElement('tr');
+                for (var j = 0; j < 3; j++)
+                    tr.appendChild(document.createElement('td'));
+                if (i == 0)
+                    tr.cells[0].innerText = 'visited:';
+                else if (i == 1)
+                    tr.cells[0].innerText = 'unvisited:';
+                else {
+                    tr.cells[0].appendChild(tick);
+                    tr.cells[0].style.textAlign = "center";
+                }
+                tr.cells[1].appendChild(a);
+                tr.cells[2].style.textAlign = "center";
+                tr.cells[2].appendChild(times);
+                table.appendChild(tr);
+                timespans[i] = times;
+                linkspans[i] = tick;
+                if (i == 1) {
+                    var tr = document.createElement('tr');
+                    var t = tr.insertCell();
+                    t.innerHTML = "";
+                    t.colSpan = 3;
+                    table.appendChild(tr);
+                    var tr = document.createElement('tr');
+                    var td1 = tr.insertCell();
+                    td1.innerHTML = "<center><b id='testarea'>TEST URL</b></center>";
+                    td1.colSpan = 2;
+                    var td2 = tr.insertCell();
+                    td2.innerHTML = "<span id='F_target'></span>";
+                    table.appendChild(tr);
+                    var tr = document.createElement('tr');
+                    tr.insertCell().className = "line"
+                    tr.insertCell().className = "line"
+                    tr.insertCell().className = "line"
+                    table.appendChild(tr);
+                }
+            }
+            document.getElementById('log').appendChild(table);
+            document.getElementById('control').firstElementChild.lastElementChild.style.visibility = "visible"
+            initParms();
+            katex.render("F_{target}", document.getElementById("F_target"), {
+                throwOnError: false
+            });
+        }
+        window.onload = function () {
+            katex.render("T", document.getElementById("Timing-time"), {
+                throwOnError: false
+            });
+            katex.render("N^*", document.getElementById("Optimal-number"), {
+                throwOnError: false
+            });
+            katex.render("F_{visited}", document.getElementById("F_visited"), {
+                throwOnError: false
+            });
+            katex.render("F_{unvisited}", document.getElementById("F_unvisited"), {
+                throwOnError: false
+            });
+        }
+    </script>
+</body>
+</html>
